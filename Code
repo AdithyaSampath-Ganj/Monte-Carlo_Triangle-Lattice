@@ -1,0 +1,216 @@
+import numpy as np
+#System
+Lattice = (20,20)
+J = 1.0
+Lx, Ly = Lattice
+num_sites = Lx * Ly
+T = 1.0
+# Numbering scheme for a 4 x 3 lattice
+'''
+  4   5   6   7
+0   1   2   3  
+'''
+# Nearest neighbour labels
+right,topr,topl,left,botl,botr  = (0,1,2,3,4,5)
+N1 = Lx*(Ly-1)
+#right & left nn-s
+num_nn = 6
+nn_table = np.zeros((num_sites, num_nn),dtype=int)
+for site in range(num_sites):
+	nn_table[site,right] = site+1
+	nn_table[site,topl] = site+Lx-1
+	nn_table[site,topr] = site+Lx
+	nn_table[site,left] = site-1
+	nn_table[site,botr] = site-Lx+1
+	nn_table[site,botl] = site-Lx
+#boundary wrap 
+for site in range(0,num_sites,Lx):
+    nn_table[site,left]=site+Lx-1   
+    nn_table[site,topl]=site+2*Lx-1
+for site in range(Lx-1,num_sites,Lx):
+    nn_table[site,botr]=site-(2*Lx-1)
+    nn_table[site,right]=site-(Lx-1)
+for site in range(0,Lx): 
+    nn_table[site,botr]=site+(N1+1)
+    nn_table[site,botl]=site+N1
+    if site==Lx-1:nn_table[site,botr]=site+(N1-Lx+1)
+for site in range(N1,num_sites): 
+    nn_table[site,topl]=site-N1-1
+    nn_table[site,topr]=site-N1
+    if site==N1:nn_table[site,topl]=site+Lx-N1-1   
+
+# basis state
+basis_state = np.ones((num_sites), dtype=int)
+
+def initialize_basis_state():
+	# random initial state
+	for i in range(num_sites):
+		if np.random.uniform(0, 1.0) < 0.5: basis_state[i] = +1
+		else: basis_state[i] = -1
+	return None
+
+def gen_next_state(beta):
+	select_site = np.random.randint(0,num_sites)
+	isum = 0
+	for site in nn_table[select_site]:
+		isum += basis_state[site]
+	delE = 2.0 * J * basis_state[select_site] * isum
+	# transition proby
+	W = np.exp(-beta*delE)
+	# acceptance
+	if (np.random.uniform(0,1.0) < W):
+		basis_state[select_site] = -basis_state[select_site]
+	return None
+
+def do_mcstep(beta):
+	for i in range(num_sites): gen_next_state(beta)
+
+def get_energy():
+    isum = 0
+    for i in range(num_sites):
+        j = nn_table[i,right]
+        isum += basis_state[i]*basis_state[j]
+        j = nn_table[i,topl]
+        isum+=basis_state[i]*basis_state[j]
+        j= nn_table[i,topr]
+        isum+=basis_state[i]*basis_state[j]
+    return float(-J*isum)
+
+def get_magnetization():
+    isum = 0
+    for i in range(num_sites):
+        isum += basis_state[i]
+    return float(abs(isum))
+
+heat_capacity20=[]
+UTL = []
+def run_simulation(T):
+    beta = 1.0/T
+    measuring_samples = 5000
+    warmup_steps = 2000
+    interval = 3
+    count = interval
+    samples = 0
+    iwork = 0
+    #magn_sum = 0.0
+    magn_sq_sum = 0.0
+    energy_sum = 0.0
+    energy_sq_sum = 0.0
+    magn_4_sum=0.0
+    initialize_basis_state()
+    for t in range(warmup_steps): do_mcstep(beta)
+    while samples != measuring_samples:
+        do_mcstep(beta)
+        # Calcuate |M| and E 
+        if count == interval:
+    # do measurements
+            magn = get_magnetization()
+            #magn_sum += magn
+            magn_sq_sum += magn*magn
+            energy = get_energy()
+            energy_sum += energy
+            energy_sq_sum += energy*energy
+            magn_4_sum += magn**4 
+            samples += 1
+            count = 0
+        count += 1
+            # print progress
+        work = 100.0*float(samples)/measuring_samples
+        if (int(work) > iwork and int(work)%10==0):
+            iwork = int(work);
+            print("done = ", int(work),'%')
+    print('simulation done!')
+    # per site averages
+    #magn_mean = magn_sum/(samples)
+    energy_mean = energy_sum/(samples)
+    magn_sq_sum = magn_sq_sum/(samples)
+    magn_4_sum = magn_4_sum/(samples)
+    energy_sq_sum = energy_sq_sum/(samples)
+    heat_capacity20.append((energy_sq_sum-(energy_mean*energy_mean))/(num_sites*T*T))
+    UTL.append(1-(magn_4_sum)/(3*(magn_sq_sum**2)))
+    print(T)
+    return 1
+
+for T in np.arange(1.0,6.0, 0.2):
+    results = run_simulation(T)
+
+UTL20 = []
+ETL20=[]
+def run_simulation1(T):
+    beta = 1.0/T
+    measuring_samples = 6000
+    warmup_steps = 2000
+    interval = 3
+    count = interval
+    samples = 0
+    iwork = 0
+    #magn_sum = 0.0
+    magn_sq_sum = 0.0
+    #energy_sum = 0.0
+    energy_sq_sum = 0.0
+    energy_4_sum = 0.0
+    magn_4_sum=0.0
+    initialize_basis_state()
+    for t in range(warmup_steps): do_mcstep(beta)
+
+    while samples != measuring_samples:
+        do_mcstep(beta)
+
+        # Calcuate |M| and E 
+        if count == interval:
+
+    # do measurements
+            magn = get_magnetization()
+            #magn_sum += magn
+            magn_sq_sum += magn*magn
+            energy = get_energy()
+            #energy_sum += energy
+            energy_sq_sum += energy*energy
+            energy_4_sum += energy**4
+            magn_4_sum += magn**4 
+            samples += 1
+            count = 0
+        count += 1
+         # print progress
+        work = 100.0*float(samples)/measuring_samples
+        if (int(work) > iwork and int(work)%10==0):
+            iwork = int(work);
+            print("done = ", int(work),'%')
+    print('simulation done!')
+    # per site averages
+    #magn_mean = magn_sum/(samples)
+    #energy_mean = energy_sum/(samples)
+    magn_sq_sum = magn_sq_sum/(samples)
+    magn_4_sum = magn_4_sum/(samples)
+    energy_sq_sum = energy_sq_sum/(samples)
+    energy_4_sum = energy_4_sum/(samples)
+    #heat_capacity8.append((energy_sq_sum-(energy_mean*energy_mean))/(num_sites*T*T))
+    UTL20.append(1-(magn_4_sum)/(3*(magn_sq_sum**2)))
+    ETL20.append(1-(energy_4_sum)/(3*(energy_sq_sum**2)))
+    print(T)
+    return 1
+
+for T in np.arange(3.60,3.70,0.005):
+    results = run_simulation1(T)
+
+import matplotlib.pyplot as plt 
+plt.plot(1/(np.arange(3.70,3.60,-0.005)),UTL20[:],'ro-',label="L=20")
+plt.ylabel('Order Parameter Cumlaent')
+plt.xlabel('Inverse Temperature')
+plt.legend()
+
+plt.plot(1/(np.arange(3.60,3.70,0.005)),ETL20[:],'ro-',label="L=20")
+plt.ylabel('Order Parameter Cumlaent')
+plt.xlabel('Inverse Temperature')
+plt.legend()
+
+plt.plot(np.arange(1.0,6.0,0.2),UTL[:],'ro-',label="L=20")
+plt.ylabel('Order Parameter Cumulent')
+plt.ylim(-0.1,0.7)
+plt.xlabel('Temperature')
+plt.legend()
+
+plt.plot(np.arange(1.0,6.0,0.2),heat_capacity20,'g^-',label='L=20')
+plt.ylabel('Heat Capacity per spin')
+plt.xlabel('Temperature')
+plt.legend()
